@@ -12,6 +12,10 @@ import (
 	"github.com/imroc/req/v3"
 )
 
+// During file transmission, you can use MD5/SHA256 to calculate the hash value of the file,
+// and calculate the hash value again after receiving the file
+// for comparison to ensure that the file is not damaged during transmission.
+
 // client a simple go http client
 var client = req.C()
 
