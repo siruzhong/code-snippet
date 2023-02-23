@@ -1,14 +1,13 @@
 package file
 
 import (
-	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 
+	"code-snippet/utils"
 	"github.com/imroc/req/v3"
 )
 
@@ -28,40 +27,45 @@ func DownloadFile(originUrl string) error {
 		return err
 	}
 	// verify the download file integrity
-	checksum := GetCheckSum(resp.Response)
+	err = CheckIntegrityByMd5(resp, filePath) // or err = CheckIntegrityBySha256(resp, filePath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CheckIntegrityByMd5 Verify the integrity of downloaded files through md5
+func CheckIntegrityByMd5(file *req.Response, filePath string) error {
+	checksum := utils.GetMd5CheckSum(file.Response)
+	decodeChecksum, err := base64.StdEncoding.DecodeString(checksum)
+	if err != nil {
+		return err
+	}
 	if checksum != "" {
-		fileChecksum, err := Sha256(filePath)
+		fileChecksum, err := utils.CalculateMd5(filePath)
 		if err != nil {
 			return err
 		}
-		if !strings.EqualFold(checksum, fileChecksum) {
+
+		if !strings.EqualFold(fmt.Sprintf("%x", decodeChecksum), fileChecksum) {
 			return errors.New("the download file is incomplete")
 		}
 	}
 	return nil
 }
 
-// GetCheckSum get file checksum from http response(prevent http request nesting)
-func GetCheckSum(resp *http.Response) string {
-	for resp.Header.Get("X-SHA256") == "" && resp.Request != nil {
-		resp = resp.Request.Response
-	}
-	return resp.Header.Get("X-SHA256")
-}
+// CheckIntegrityBySha256 Verify the integrity of downloaded files through sha256
+func CheckIntegrityBySha256(file *req.Response, filePath string) error {
+	checksum := utils.GetSha256CheckSum(file.Response)
+	if checksum != "" {
+		fileChecksum, err := utils.CalculateSha256(filePath)
+		if err != nil {
+			return err
+		}
 
-// Sha256 Obtain the SHA256 verification value of the file
-func Sha256(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
+		if !strings.EqualFold(checksum, fileChecksum) {
+			return errors.New("the download file is incomplete")
+		}
 	}
-	defer f.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-
-	hex := fmt.Sprintf("%x", h.Sum(nil))
-	return hex, nil
+	return nil
 }
